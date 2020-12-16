@@ -1,0 +1,109 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Parameters": {
+    "KeyName": {
+       "Type": "AWS::EC2::KeyPair::KeyName",
+       "Default": "linux_key",
+       "Description": "Name of an existing EC2 KeyPair to enable SSH access to the ECS instances."
+    },
+    "InstanceTpe": {
+   "Type": "String",
+   "Default": "t2.medium",
+   "Description": "Enter type of instance of Auto-Scaling group"
+   },
+   "SecurityGroupID": {
+   "Type": "AWS::EC2::SecurityGroup::Id",
+   "Default": "sg-046f864067dd167a2",
+   "Description": "Enter Security-Group Id to use for Autoscaling group"
+   },
+   "SubnetID": {
+   "Type": "AWS::EC2::Subnet::Id",
+   "Default": "",
+   "Description": "Enter Subnet ID for the Autoscaling Instances"
+   },
+   "": {
+   "Type": "AWS::EC2::Image::Id",
+   "Default": "ami-07fbdcfe29326c4fb",
+   "Description": "Enter AMI ID for AS group"
+   }
+   },
+   "Resources": {
+
+   "LaunchConfig": {
+   "Type": "AWS::AutoScaling::LaunchConfiguration",
+   "Properties": {
+   "AssociatePublicIpAddress": true,
+   "BlockDeviceMappings": [
+   {
+   "DeviceName": "/dev/xvda",
+   "Ebs": {
+   "DeleteOnTermination": true,
+   "Encrypted": false,
+   "VolumeSize": 30,
+   "VolumeType": "gp2"
+   }
+   }
+   ],
+   "EbsOptimized": false,
+   "IamInstanceProfile": "EC2S3RoleForReadWrite",
+   "ImageId": "ami-07fbdcfe29326c4fb",
+   "InstanceMonitoring": false,
+   "InstanceType": {
+   "Ref": "InstanceTpe"
+   },
+   "KeyName": {
+   "Ref": "KeyName"
+   },
+   "LaunchConfigurationName": "launchConfigforJmeter",
+   "SecurityGroups": [
+   {"Ref" : "SecurityGroupID"}
+   ],
+   "UserData": {
+   "Fn::Base64": {
+   "Fn::Join": [
+   "",
+           [
+           "#!/usr/bin/env bash\n",
+           "sudo apt-get update -y\n",
+           "sudo wget -O- https://apt.corretto.aws/corretto.key | sudo apt-key add - \n",
+           "sudo add-apt-repository 'deb https://apt.corretto.aws stable main'\n",
+           "sudo apt-get update; sudo apt-get install -y java-11-amazon-corretto-jdk\n",
+           "mkdir /home/ubuntu/jmeter && cd jmeter\n",
+           "apt install awscli -y && aws s3 cp s3://esssessmentloadtesting/apache-jmeter-5.0.tar.gz /home/ubuntu/jmeter\n",
+           "sudo mv /home/ubuntu/jmeter/apache-jmeter* /home/ubuntu/jmeter/jmeter.tgz\n",
+           "cd /home/ubuntu/jmeter && sudo tar -xvf /home/ubuntu/jmeter/jmeter.tgz && mv apache-jmeter* apache-jmeter\n",
+           "sudo chown -R ubuntu /home/ubuntu/jmeter\n",
+           "echo \"export PATH=\"$PATH\":/home/ubuntu/jmeter/apache-jmeter/bin\" >> /home/ubuntu/.bashrc\n",
+           "source /home/ubuntu/.bashrc\n",
+           "wget -O /home/ubuntu/jmeter/chromedriver.zip https://chromedriver.storage.googleapis.com/83.0.4103.39/chromedriver_linux64.zip\n",
+           "sudo apt install unzip -y && sudo unzip /home/ubuntu/jmeter/chromedriver.zip -d /usr/bin/ && sudo rm /home/ubuntu/jmeter/chromedriver.zip\n",
+           "sudo wget -O /home/ubuntu/jmeter/google-chrome.deb https://www.slimjetbrowser.com/chrome/files/83.0.4103.116/google-chrome-stable_current_amd64.deb\n",
+           "sudo apt update -y && sudo apt install -y /home/ubuntu/jmeter/google-chrome.deb"
+           ]
+           ]
+           }
+   }
+   }
+   },
+    "ASgroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+      "AutoScalingGroupName": "ASgroupsforJmeter",
+      "LaunchConfigurationName": "launchConfigforJmeter",
+      "MinSize": "minimumASGroupSize",
+      "MaxSize": "MaximumASGroupSize",
+      "Tags": [
+    {
+      "Key": "Name",
+      "PropagateAtLaunch": false,
+      "Value": "ECSASgroup"
+    }
+    ],
+      "VPCZoneIdentifier": [
+      {"Ref" : "SubnetID"}
+    ]
+   },
+    "DependsOn": "LaunchConfig"
+   }
+   }
+}
